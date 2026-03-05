@@ -3,32 +3,56 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 )
 
-// User: Primera letra mayúscula = Público (Exportado para el serializador JSON)
-// Los `struct tags` (entre comillas invertidas) definen el nombre en el JSON
 type User struct {
 	ID    int    `json:"id"`
 	Email string `json:"email"`
-	Name string `json:"name"`
-	Age  int8`json:"age"`
+	Name  string `json:"name"`
+	Age   int8   `json:"age"`
 }
 
-func userHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Creamos el dato (Instanciamos el struct)
-	u := User{ID: 1, Email: "dev@example.com", Name:"Developer", Age:37}
+// Simulamos nuestra DB con un Mutex para evitar Race Conditions
+var (
+	users = []User{
+		{ID: 1, Email: "admin@test.com", Name: "Admin", Age: 34},
+	}
+	mu sync.Mutex 
+)
 
-	// 2. Definimos el Header (Como en Express: res.set)
+func handleUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// 3. Serializamos y enviamos (El "Stream" directo al ResponseWriter)
-	json.NewEncoder(w).Encode(u)
+	switch r.Method {
+	case http.MethodGet:
+		// READ: Retornar todos los usuarios
+		json.NewEncoder(w).Encode(users)
+
+	case http.MethodPost:
+		// CREATE: Leer el body y agregar
+		var newUser User
+		if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		
+		mu.Lock() // Bloqueamos para escribir seguro
+		newUser.ID = len(users) + 1
+		users = append(users, newUser)
+		mu.Unlock() // Liberamos
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(newUser)
+
+	default:
+		http.Error(w, "Metodo no permitido", http.StatusMethodNotAllowed)
+	}
 }
 
 func main() {
-	// Definimos la ruta y el handler
-	http.HandleFunc("/user", userHandler)
-
-	// Levantamos el servidor (Bloqueante, como app.listen)
+	http.HandleFunc("/users", handleUsers)
+	
+	// El servidor ahora corre en el 8080 de tu contenedor
 	http.ListenAndServe(":8080", nil)
 }

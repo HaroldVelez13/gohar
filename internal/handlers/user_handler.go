@@ -25,7 +25,7 @@ func NewUserHandler() *UserHandler {
 
 
 
-func (h *UserHandler) GetAll(w http.ResponseWriter, , r *http.Request) {
+func (h *UserHandler) GetAll(w http.ResponseWriter,  r *http.Request) {
 	json.NewEncoder(w).Encode(h.users)
 }
 
@@ -42,7 +42,7 @@ func (h *UserHandler) GetByID(w http.ResponseWriter,  r *http.Request) {
 	http.Error(w, "User not found", http.StatusNotFound)
 }
 
-func (h *UserHandler) create(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var newUser models.User
 	if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
 		http.Error(w, "Invalid body", http.StatusBadRequest)
@@ -59,7 +59,7 @@ func (h *UserHandler) create(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(newUser)
 }
 
-func (h *UserHandler) update(w http.ResponseWriter,   r *http.Request)  {
+func (h *UserHandler) Update(w http.ResponseWriter,   r *http.Request)  {
 	idStr := chi.URLParam(r, "id") // ¡Mucho más limpio que Split!
 	id, _ := strconv.Atoi(idStr)
 
@@ -85,7 +85,7 @@ func (h *UserHandler) update(w http.ResponseWriter,   r *http.Request)  {
 	
 }
 
-func (h *UserHandler) deleteUser(w http.ResponseWriter,  r *http.Request)  {
+func (h *UserHandler) Delete(w http.ResponseWriter,  r *http.Request)  {
 	idStr := chi.URLParam(r, "id") // ¡Mucho más limpio que Split!
 	id, _ := strconv.Atoi(idStr)
 		h.mu.Lock()

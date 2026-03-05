@@ -3,15 +3,20 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/HaroldVelez13/gohar/internal/config"
+	"github.com/HaroldVelez13/gohar/internal/handlers"
+	"github.com/HaroldVelez13/gohar/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/HaroldVelez13/gohar/internal/storage"
-	"github.com/HaroldVelez13/gohar/internal/handlers"
 )
 
 func main() {
-	// 1. Conectar a la DB
-	db, err := storage.ConnectDB()
+	// 1. Cargar Configuración
+	cfg := config.LoadConfig()
+
+	// 2. Conectar a DB usando la URL de la config
+	db, err := storage.ConnectDB(cfg.DBURL) //
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -25,7 +30,6 @@ func main() {
 	// Middlewares: Chi trae algunos de fábrica muy útiles
 	r.Use(middleware.Logger)    // Loguea cada petición en consola
 	r.Use(middleware.Recoverer) // Evita que el server muera si hay un panic
-
 
 	// Definición de rutas tipo Express
 	r.Route("/users", func(r chi.Router) {

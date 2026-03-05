@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Comando para compilar tu binario (ajusta la ruta a tu main.go)
+  cmd = "go build -o ./tmp/main ./cmd/api/main.go"
+  # Ejecuta el binario recién compilado
+  bin = "./tmp/main"
+  # Vigila extensiones .go, .tpl, .tmpl, .html
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  # Ignora estas carpetas para no entrar en bucles
+  exclude_dir = ["assets", "tmp", "vendor"]
+  # Retraso para no compilar demasiado rápido mientras escribes
+  delay = 1000 # ms
+
+[log]
+  time = true

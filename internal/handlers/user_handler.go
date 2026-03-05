@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
+	"github.com/go-chi/chi/v5"
 	"github.com/HaroldVelez13/gohar/internal/models" // Importa tu modelo
 )
 
@@ -23,45 +23,26 @@ func NewUserHandler() *UserHandler {
 	}
 }
 
-func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	
-	parts := strings.Split(r.URL.Path, "/")
-	var id int
-	if len(parts) > 2 && parts[2] != "" {
-		id, _ = strconv.Atoi(parts[2])
-	}
 
-	switch r.Method {
-	case http.MethodGet:
-		h.getUsers(w, id)
-	case http.MethodPost:
-		h.createUser(w, r)
-	case http.MethodPut:
-		h.updateUser(w,id,r)
-	case http.MethodDelete:
-		h.deleteUser(w, id)
-	// ... aquí irían Delete y Update siguiendo el mismo patrón
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
 
-func (h *UserHandler) getUsers(w http.ResponseWriter, id int) {
-	if id > 0 {
-		for _, u := range h.users {
-			if u.ID == id {
-				json.NewEncoder(w).Encode(u)
-				return
-			}
-		}
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
+func (h *UserHandler) GetAll(w http.ResponseWriter, , r *http.Request) {
 	json.NewEncoder(w).Encode(h.users)
 }
 
-func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) GetByID(w http.ResponseWriter,  r *http.Request) {
+	idStr := chi.URLParam(r, "id") // ¡Mucho más limpio que Split!
+	id, _ := strconv.Atoi(idStr)
+
+	for _, u := range h.users {
+		if u.ID == id {
+			json.NewEncoder(w).Encode(u)
+			return
+		}
+	}
+	http.Error(w, "User not found", http.StatusNotFound)
+}
+
+func (h *UserHandler) create(w http.ResponseWriter, r *http.Request) {
 	var newUser models.User
 	if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
 		http.Error(w, "Invalid body", http.StatusBadRequest)
@@ -78,7 +59,11 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(newUser)
 }
 
-func (h *UserHandler) updateUser(w http.ResponseWriter, id int,  r *http.Request)  {
+func (h *UserHandler) update(w http.ResponseWriter,   r *http.Request)  {
+	idStr := chi.URLParam(r, "id") // ¡Mucho más limpio que Split!
+	id, _ := strconv.Atoi(idStr)
+
+	
 	if id == 0 {
 			http.Error(w, "ID requerido", http.StatusBadRequest)
 			return
@@ -100,11 +85,9 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, id int,  r *http.Request
 	
 }
 
-func (h *UserHandler) deleteUser(w http.ResponseWriter, id int) {
-	if id == 0 {
-			http.Error(w, "ID requerido", http.StatusBadRequest)
-			return
-		}
+func (h *UserHandler) deleteUser(w http.ResponseWriter,  r *http.Request)  {
+	idStr := chi.URLParam(r, "id") // ¡Mucho más limpio que Split!
+	id, _ := strconv.Atoi(idStr)
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		for i, u := range h.users {

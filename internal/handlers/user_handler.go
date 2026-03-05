@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
 	"github.com/HaroldVelez13/gohar/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -13,7 +14,7 @@ import (
 )
 
 type UserHandler struct {
-	db *pgxpool.Pool
+	db       *pgxpool.Pool
 	validate *validator.Validate // Instancia del validador
 }
 
@@ -26,24 +27,55 @@ func NewUserHandler(db *pgxpool.Pool) *UserHandler {
 
 // GET /users
 func (h *UserHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query(r.Context(), "SELECT id, email, name, age FROM users ORDER BY id")
+	// 1. Obtener parámetros de paginación con valores por defecto
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 1 || limit > 100 {
+		limit = 5
+	} // Máximo 100 por seguridad
+
+	offset := (page - 1) * limit
+
+	// 2. Obtener el total de registros para la metadata
+	var total int
+	err := h.db.QueryRow(r.Context(), "SELECT COUNT(*) FROM users").Scan(&total)
 	if err != nil {
-		http.Error(w, "Error al consultar usuarios", http.StatusInternalServerError)
+		h.sendError(w, "Error al contar registros", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Query con LIMIT y OFFSET
+	rows, err := h.db.Query(r.Context(),
+		"SELECT id, email, name, age FROM users ORDER BY id LIMIT $1 OFFSET $2",
+		limit, offset)
+	if err != nil {
+		h.sendError(w, "Error al obtener datos", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	users := []models.User{} // Inicializamos vacío para que el JSON no sea 'null' sino '[]'
+	users := []models.User{}
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Age); err != nil {
-			continue
-		}
+		rows.Scan(&u.ID, &u.Email, &u.Name, &u.Age)
 		users = append(users, u)
 	}
 
+	// 4. Construir respuesta final
+	lastPage := (total + limit - 1) / limit
+	response := models.UserPagedResponse{
+		Data:     users,
+		Total:    total,
+		Page:     page,
+		LastPage: lastPage,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(response)
 }
 
 // GET /users/{id}
@@ -51,7 +83,7 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
 	var u models.User
-	err := h.db.QueryRow(r.Context(), 
+	err := h.db.QueryRow(r.Context(),
 		"SELECT id, email, name, age FROM users WHERE id = $1", id).
 		Scan(&u.ID, &u.Email, &u.Name, &u.Age)
 
@@ -71,7 +103,7 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // POST /users
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var u models.User
-	
+
 	// 1. Decode del JSON
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		http.Error(w, "JSON mal formado", http.StatusBadRequest)
@@ -86,22 +118,22 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Si todo está bien, procedemos al INSERT
-	err := h.db.QueryRow(r.Context(), 
-		"INSERT INTO users (email, name, age) VALUES ($1, $2, $3) RETURNING id", 
+	err := h.db.QueryRow(r.Context(),
+		"INSERT INTO users (email, name, age) VALUES ($1, $2, $3) RETURNING id",
 		u.Email, u.Name, u.Age).Scan(&u.ID)
 
 	if err != nil {
-        // 4. Capturar el error de Email Duplicado (Unique Constraint)
-        // El código de error estándar de Postgres para unique_violation es 23505
-        if strings.Contains(err.Error(), "unique_violation") || strings.Contains(err.Error(), "23505") {
-            h.sendError(w, "El correo electrónico ya está registrado", http.StatusConflict)
-            return
-        }
+		// 4. Capturar el error de Email Duplicado (Unique Constraint)
+		// El código de error estándar de Postgres para unique_violation es 23505
+		if strings.Contains(err.Error(), "unique_violation") || strings.Contains(err.Error(), "23505") {
+			h.sendError(w, "El correo electrónico ya está registrado", http.StatusConflict)
+			return
+		}
 
-        // Cualquier otro error de DB sí es un 500
-        h.sendError(w, "Error inesperado al guardar en la base de datos", http.StatusInternalServerError)
-        return
-    }
+		// Cualquier otro error de DB sí es un 500
+		h.sendError(w, "Error inesperado al guardar en la base de datos", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -126,8 +158,8 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Ejecutar el Update en la DB
 	// Usamos el ID del URL ($4) y los datos del Body ($1, $2, $3)
-	tag, err := h.db.Exec(r.Context(), 
-		"UPDATE users SET email=$1, name=$2, age=$3 WHERE id=$4", 
+	tag, err := h.db.Exec(r.Context(),
+		"UPDATE users SET email=$1, name=$2, age=$3 WHERE id=$4",
 		u.Email, u.Name, u.Age, id)
 
 	if err != nil {

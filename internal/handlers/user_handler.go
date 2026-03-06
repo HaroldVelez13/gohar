@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/HaroldVelez13/gohar/internal/models"
+	"github.com/HaroldVelez13/gohar/internal/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5"
@@ -44,7 +45,7 @@ func (h *UserHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	var total int
 	err := h.db.QueryRow(r.Context(), "SELECT COUNT(*) FROM users").Scan(&total)
 	if err != nil {
-		h.sendError(w, "Error al contar registros", http.StatusInternalServerError)
+		response.Error(w, http.StatusInternalServerError, "Error al contar registros")
 		return
 	}
 
@@ -53,7 +54,7 @@ func (h *UserHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, email, name, age FROM users ORDER BY id LIMIT $1 OFFSET $2",
 		limit, offset)
 	if err != nil {
-		h.sendError(w, "Error al obtener datos", http.StatusInternalServerError)
+		response.Error(w, http.StatusInternalServerError, "Error al obtener datos")
 		return
 	}
 	defer rows.Close()
@@ -89,9 +90,9 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			http.Error(w, "Usuario no encontrado", http.StatusNotFound)
+			response.Error(w, http.StatusNotFound, "Usuario no encontrado")
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			response.Error(w, http.StatusInternalServerError, err.Error())
 		}
 		return
 	}
@@ -106,14 +107,14 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Decode del JSON
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-		http.Error(w, "JSON mal formado", http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "JSON mal formado")
 		return
 	}
 
 	// 2. Validación de reglas
 	if err := h.validate.Struct(u); err != nil {
 		// Si hay error, devolvemos un 400 con el detalle
-		http.Error(w, "Datos inválidos: "+err.Error(), http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "Datos inválidos: "+err.Error())
 		return
 	}
 
@@ -126,12 +127,12 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		// 4. Capturar el error de Email Duplicado (Unique Constraint)
 		// El código de error estándar de Postgres para unique_violation es 23505
 		if strings.Contains(err.Error(), "unique_violation") || strings.Contains(err.Error(), "23505") {
-			h.sendError(w, "El correo electrónico ya está registrado", http.StatusConflict)
+			response.Error(w, http.StatusConflict, "El correo electrónico ya está registrado")
 			return
 		}
 
 		// Cualquier otro error de DB sí es un 500
-		h.sendError(w, "Error inesperado al guardar en la base de datos", http.StatusInternalServerError)
+		response.Error(w, http.StatusInternalServerError, "Error inesperado al guardar en la base de datos")
 		return
 	}
 
@@ -146,13 +147,13 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var u models.User
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-		h.sendError(w, "JSON inválido", http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 
 	// 1. Validar Formato (Email, Min Length, etc.)
 	if err := h.validate.Struct(u); err != nil {
-		h.sendError(w, "Validación fallida: "+err.Error(), http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "Validación fallida: "+err.Error())
 		return
 	}
 
@@ -166,15 +167,15 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		// 3. Validar si el email ya existe (Error de Postgres: 23505)
 		// En pgx, puedes capturar errores específicos de la DB
 		if strings.Contains(err.Error(), "unique_violation") || strings.Contains(err.Error(), "23505") {
-			h.sendError(w, "El email ya está en uso por otro usuario", http.StatusConflict)
+			response.Error(w, http.StatusConflict, "El email ya está en uso por otro usuario")
 			return
 		}
-		h.sendError(w, "Error interno", http.StatusInternalServerError)
+		response.Error(w, http.StatusInternalServerError, "Error interno")
 		return
 	}
 
 	if tag.RowsAffected() == 0 {
-		h.sendError(w, "Usuario no encontrado", http.StatusNotFound)
+		response.Error(w, http.StatusNotFound, "Usuario no encontrado")
 		return
 	}
 
@@ -199,10 +200,4 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *UserHandler) sendError(w http.ResponseWriter, message string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/HaroldVelez13/gohar/internal/config"
 	"github.com/HaroldVelez13/gohar/internal/handlers"
+	customMW "github.com/HaroldVelez13/gohar/internal/middleware"
 	"github.com/HaroldVelez13/gohar/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,15 +23,17 @@ func main() {
 	}
 	defer db.Close()
 
-	// 2. Inyectar DB al handler
-	userH := handlers.NewUserHandler(db)
-
 	r := chi.NewRouter()
 
-	// Middlewares: Chi trae algunos de fábrica muy útiles
-	r.Use(middleware.Logger)    // Loguea cada petición en consola
-	r.Use(middleware.Recoverer) // Evita que el server muera si hay un panic
+	// 2. Inyectar DB al handler
 
+	// Middlewares: Chi trae algunos de fábrica muy útiles
+	// --- MIDDLEWARES GLOBALES ---
+	r.Use(middleware.Recoverer) // Evita que el servidor muera si hay un panic
+	r.Use(customMW.Logger)      // Nuestro nuevo logger (ajusta el import)
+	r.Use(middleware.RealIP)    // Obtiene la IP real del cliente
+
+	userH := handlers.NewUserHandler(db)
 	// Definición de rutas tipo Express
 	r.Route("/users", func(r chi.Router) {
 		r.Get("/", userH.GetAll)
